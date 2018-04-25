@@ -47,8 +47,6 @@ namespace Riskord
         }
 
         public DiscordSocketClient Client { get; set; } = new DiscordSocketClient();
-        public GameMaster Game { get; set; } = null;
-        public GameBuilder Builder { get; set; } = null;
 
         public bool IsReady { get; private set; } = false;
 
@@ -74,6 +72,9 @@ namespace Riskord
             var author = msg.Author.Username;
             var text = msg.Content;
             var qadmin = (msg.Author is SocketGuildUser) ? (msg.Author as SocketGuildUser).GuildPermissions.Administrator : false;
+            var channelid = msg.Channel.Id.ToString();
+            var buildfile = String.Format("{0}.builder.pdo", channelid);
+            var gamefile = String.Format("{0}.game.pdo", channelid);
 
             if (TaggedIn(msg, Client.CurrentUser.Username))
             {
@@ -87,22 +88,26 @@ namespace Riskord
                 else if (text.Contains(" xtroops"))
                 {
                     var xtroops = 0;
-                    if (Game != null)
+                    if (File.Exists(gamefile))
                     {
-                        if (Game.Players.Exists(p => p.Name == author))
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        if (game.Players.Exists(p => p.Name == author))
                         {
                             // Find the author
-                            var player = Game.Players.Where(p => p.Name == author).ToList()[0];
+                            var player = game.Players.Where(p => p.Name == author).ToList()[0];
                             xtroops = player.XTroops;
                             var response = String.Format("# of Troops for {0}:  {1}", author, xtroops);
                             await msg.Channel.SendMessageAsync(response);
                         }
                     }
-                    else if (Builder != null)
+                    else if (File.Exists(buildfile))
                     {
-                        if (Builder.Players.Exists(p => p.Name == author))
+                        var buildcontents = File.ReadAllText(buildfile);
+                        var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
+                        if (builder.Players.Exists(p => p.Name == author))
                         {
-                            xtroops = Builder.XTroops(author);
+                            xtroops = builder.XTroops(author);
                             var response = String.Format("# of Troops for {0}:  {1}", author, xtroops);
                             await msg.Channel.SendMessageAsync(response);
                         }
@@ -115,14 +120,18 @@ namespace Riskord
 
                 else if (text.Contains(" qturn"))
                 {
-                    if (Game != null)
+                    if (File.Exists(gamefile))
                     {
-                        var response = String.Format("Current Player:  {0}", Game.CurrentPlayer);
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        var response = String.Format("Current Player:  {0}", game.CurrentPlayer);
                         await msg.Channel.SendMessageAsync(response);
                     }
-                    else if (Builder != null)
+                    else if (File.Exists(buildfile))
                     {
-                        var turn = Builder.Players[Builder.Turn];
+                        var buildcontents = File.ReadAllText(buildfile);
+                        var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
+                        var turn = builder.Players[builder.Turn].Name;
                         var response = String.Format("Current Player:  {0}", turn);
                         await msg.Channel.SendMessageAsync(response);
                     }
@@ -134,9 +143,11 @@ namespace Riskord
 
                 else if (text.Contains(" qphase"))
                 {
-                    if (Game != null)
+                    if (File.Exists(gamefile))
                     {
-                        var player = Game.Players[Game.Turn];
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        var player = game.Players[game.Turn];
                         var phase = String.Empty;
                         if (player.CanPlace)
                             phase = "Place";
@@ -154,34 +165,38 @@ namespace Riskord
 
                 else if (text.Contains(" repr"))
                 {
-                    if (Game != null)
+                    if (File.Exists(gamefile))
                     {
-                        var acc = "Current Turn:  " + Game.CurrentPlayer + Environment.NewLine;
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        var acc = "Current Turn:  " + game.CurrentPlayer + Environment.NewLine;
                         acc += "```fs" + Environment.NewLine;
-                        acc += String.Format("{0,-20} : {1,-30} : {2,7}", "Territory", "Player", "Troops");
+                        acc += String.Format("{0,-15}  {1,7}  {2}", "Territory", "Troops", "Player");
                         acc += Environment.NewLine;
-                        foreach (KeyValuePair<string, ControlRecord> kvp in Game.Board.Territories)
+                        foreach (KeyValuePair<string, ControlRecord> kvp in game.Board.Territories)
                         {
-                            acc += String.Format("{0,-20} : \"{1,-30}\" : {2,7}", kvp.Key, kvp.Value.PlayerName, kvp.Value.Troops);
+                            acc += String.Format("{0,-15}  {1,7}  {2}", kvp.Key, kvp.Value.Troops, "\"" + kvp.Value.PlayerName + "\"");
                             acc += Environment.NewLine;
                         }
                         acc += "```";
                         await msg.Channel.SendMessageAsync(acc);
                     }
-                    else if (Builder != null)
+                    else if (File.Exists(buildfile))
                     {
-                        var acc = "Current Turn:  " + Builder.Players[Builder.Turn] + Environment.NewLine;
+                        var buildcontents = File.ReadAllText(buildfile);
+                        var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
+                        var acc = "Current Turn:  " + builder.Players[builder.Turn].Name + Environment.NewLine;
                         acc += "```fs" + Environment.NewLine;
-                        acc += String.Format("{0,-20} : {1,-30} : {2,7}", "Territory", "Player", "Troops");
+                        acc += String.Format("{0,-15}  {1,7}  {2}", "Territory", "Troops", "Player");
                         acc += Environment.NewLine;
-                        foreach (KeyValuePair<string, ControlRecord> kvp in Builder.Territories)
+                        foreach (KeyValuePair<string, ControlRecord> kvp in builder.Territories)
                         {
-                            acc += String.Format("{0,-20} : \"{1,-30}\" : {2,7}", kvp.Key, kvp.Value.PlayerName, kvp.Value.Troops);
+                            acc += String.Format("{0,-15}  {1,7}  {2}", kvp.Key, kvp.Value.Troops, "\"" + kvp.Value.PlayerName + "\"");
                             acc += Environment.NewLine;
                         }
-                        foreach (var s in Builder.Unclaimed)
+                        foreach (var s in builder.Unclaimed)
                         {
-                            acc += String.Format("{0,-20} : {1,-30} : {2,7}", s, "Unclaimed", "_");
+                            acc += String.Format("{0,-15}  {1,7}  {2}", s, "_", "Unclaimed");
                             acc += Environment.NewLine;
                         }
                         acc += "```";
@@ -189,6 +204,8 @@ namespace Riskord
                     }
                     else
                     {
+                        Console.WriteLine(buildfile);
+                        Console.WriteLine(gamefile);
                         await msg.Channel.SendMessageAsync("No game in progress");
                     }
                 }
@@ -219,9 +236,11 @@ namespace Riskord
                         {
                             var contents = File.ReadAllText(filename);
                             var graph = JsonConvert.DeserializeObject<Graph>(contents);
-                            if (Builder == null && Game == null) // Might remove these checks later
+                            if ((!File.Exists(buildfile)) && (!File.Exists(gamefile))) // Might remove these checks later
                             {
-                                Builder = new GameBuilder(usrs, graph);
+                                var builder = new GameBuilder(usrs, graph);
+                                var jsonbuilder = JsonConvert.SerializeObject(builder, Formatting.Indented);
+                                File.WriteAllText(buildfile, jsonbuilder);
                                 string acc = "New game started with turn order @" + usrs[0];
                                 for (int i = 1; i < usrs.Count; i++)
                                 {
@@ -239,18 +258,22 @@ namespace Riskord
                 else if (text.Contains(" claim "))
                 {
                     var rest = text.TextAfter("claim");
-                    if (Builder != null)
+                    if (File.Exists(buildfile))
                     {
-                        if (Builder.Unclaimed.Contains(rest))
+                        var buildcontents = File.ReadAllText(buildfile);
+                        var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
+                        if (builder.Unclaimed.Contains(rest))
                         {
-                            if (Builder.Players[Builder.Turn].Name == author)
+                            if (builder.Players[builder.Turn].Name == author)
                             {
-                                Builder.Claim(author, rest);
+                                builder.Claim(author, rest);
                                 await msg.Channel.SendMessageAsync(author + " has claimed " + rest);
-                                if (Builder.Unclaimed.Count == 0)
+                                if (builder.Unclaimed.Count == 0)
                                 {
                                     await msg.Channel.SendMessageAsync("All territories have been claimed.  You can now place troops");
                                 }
+                                var jsonbuilder = JsonConvert.SerializeObject(builder, Formatting.Indented);
+                                File.WriteAllText(buildfile, jsonbuilder);
                             }
                             else await msg.Channel.SendMessageAsync("You can't claim territories outside of your turn");
                         }
@@ -262,38 +285,47 @@ namespace Riskord
                 else if (text.Contains(" place "))
                 {
                     var rest = text.TextAfter("place");
-                    if (Builder != null) // Setup Phase
+                    if (File.Exists(buildfile)) // Setup Phase
                     {
-                        if (Builder.Unclaimed.Count == 0) // All territories claimed
+                        var buildcontents = File.ReadAllText(buildfile);
+                        var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
+                        if (builder.Unclaimed.Count == 0) // All territories claimed
                         {
                             var parts = rest.Split(' ');
                             if (parts.Length == 2 && Int32.TryParse(parts[1], out int xtroops)) // Correct format
                             {
-                                if (Builder.Territories.ContainsKey(parts[0])) // Territory exists
+                                if (builder.Territories.ContainsKey(parts[0])) // Territory exists
                                 {
-                                    if (Builder.Territories[parts[0]].PlayerName == author) // You own it
+                                    if (builder.Territories[parts[0]].PlayerName == author) // You own it
                                     {
-                                        if (Builder.Players.Exists(p => p.Name == author)) // Does the player exist?  Shouldn't be necessary but whatever
+                                        if (builder.Players.Exists(p => p.Name == author)) // Does the player exist?  Shouldn't be necessary but whatever
                                         {
                                             // Get the first (only) element from a list of players whose names match author's name
-                                            var player = Builder.Players.Where(p => p.Name == author).ToList()[0];
+                                            var player = builder.Players.Where(p => p.Name == author).ToList()[0];
                                             if (player.XTroops >= xtroops) // Do they have enough troops?
                                             {
                                                 player.XTroops -= xtroops;
-                                                Builder.Territories[parts[0]].Troops += xtroops;
+                                                builder.Territories[parts[0]].Troops += xtroops;
                                                 var response = String.Format("{0} has placed {1} troops on {2}, with {3} remaining", author, xtroops, parts[0], player.XTroops);
                                                 await msg.Channel.SendMessageAsync(response);
+
+                                                var jsonbuilder = JsonConvert.SerializeObject(builder, Formatting.Indented);
+                                                File.WriteAllText(buildfile, jsonbuilder);
+
                                                 var acc = false; // Does anyone have troops left?
-                                                foreach (Player p in Builder.Players)
+                                                foreach (Player p in builder.Players)
                                                     if (p.XTroops > 0)
                                                         acc = true;
                                                 if (!acc) // If not, trash the GameBuilder and start the game!
                                                 {
-                                                    Game = Builder.Finalize();
-                                                    Builder = null;
-                                                    Game.Turn = 0;
-                                                    Game.Players[0].XTroops = Game.XTroops(0);
-                                                    Game.Players[0].CanPlace = true;
+                                                    var game = builder.Finalize();
+                                                    builder = null;
+                                                    File.Delete(buildfile);
+                                                    game.Turn = 0;
+                                                    game.Players[0].XTroops = game.XTroops(0);
+                                                    game.Players[0].CanPlace = true;
+                                                    var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
+                                                    File.WriteAllText(gamefile, jsongame);
                                                     // Game.Turn = -1; Game.AdvanceTurn();
                                                     await msg.Channel.SendMessageAsync("Setup phase has ended - it's " + author + "'s turn");
                                                 }
@@ -307,26 +339,28 @@ namespace Riskord
                             else await msg.Channel.SendMessageAsync("Ya screwed up the formatting...try `@Riskord place [territory] [amount]`");
                         }
                     }
-                    else if (Game != null) // We're in-game
+                    if (File.Exists(gamefile))
                     {
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
                         var parts = rest.Split(' ');
                         if (parts.Length == 2 && Int32.TryParse(parts[1], out int xtroops))
                         {
-                            if (Game.CurrentPlayer == author) // It's your turn
+                            if (game.CurrentPlayer == author) // It's your turn
                             {
-                                if (Game.Board.Territories.ContainsKey(parts[0])) // Territory exists
+                                if (game.Board.Territories.ContainsKey(parts[0])) // Territory exists
                                 {
-                                    if (Game.Board.Territories[parts[0]].PlayerName == author) // You own it
+                                    if (game.Board.Territories[parts[0]].PlayerName == author) // You own it
                                     {
-                                        if (Game.Players.Exists(p => p.Name == author)) // Does the player exist?  Shouldn't be necessary
+                                        if (game.Players.Exists(p => p.Name == author)) // Does the player exist?  Shouldn't be necessary
                                         {
-                                            var player = Game.Players[Game.Turn];
+                                            var player = game.Players[game.Turn];
                                             if (player.XTroops >= xtroops)
                                             {
                                                 if (player.CanPlace)
                                                 {
                                                     player.XTroops -= xtroops;
-                                                    Game.Board.Territories[parts[0]].Troops += xtroops;
+                                                    game.Board.Territories[parts[0]].Troops += xtroops;
                                                     if (player.XTroops <= 0)
                                                     {
                                                         player.CanPlace = false;
@@ -339,6 +373,8 @@ namespace Riskord
                                                         var response = String.Format("{0} has placed {1} troops on {2}, with {3} remaining", author, xtroops, parts[0], player.XTroops);
                                                         await msg.Channel.SendMessageAsync(response);
                                                     }
+                                                    var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
+                                                    File.WriteAllText(gamefile, jsongame);
                                                 }
                                                 else await msg.Channel.SendMessageAsync("You can't place troops out of turn");
                                             }
@@ -362,15 +398,19 @@ namespace Riskord
 
                 else if (text.Contains(" noattack"))
                 {
-                    if (Game != null)
+                    if (File.Exists(gamefile))
                     {
-                        if (Game.CurrentPlayer == author) // Is it your turn?
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        if (game.CurrentPlayer == author) // Is it your turn?
                         {
-                            var player = Game.Players[Game.Turn];
+                            var player = game.Players[game.Turn];
                             if (player.CanAttack) // Can you attack?
                             {
                                 player.CanAttack = false;
                                 player.CanFortify = true;
+                                var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
+                                File.WriteAllText(gamefile, jsongame);
                                 var response = String.Format("{0} has forfeited their attack", author);
                                 await msg.Channel.SendMessageAsync(response);
                             }
@@ -383,16 +423,20 @@ namespace Riskord
 
                 else if (text.Contains(" nofort"))
                 {
-                    if (Game != null)
+                    if (File.Exists(gamefile))
                     {
-                        if (Game.CurrentPlayer == author) // Is it your turn?
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        if (game.CurrentPlayer == author) // Is it your turn?
                         {
-                            var player = Game.Players[Game.Turn];
+                            var player = game.Players[game.Turn];
                             if (player.CanFortify)
                             {
                                 player.CanFortify = false;
-                                Game.AdvanceTurn();
-                                var response = String.Format("{0} has forfeited their fortification{1}It's {2}'s turn", author, Environment.NewLine, Game.CurrentPlayer);
+                                game.AdvanceTurn();
+                                var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
+                                File.WriteAllText(gamefile, jsongame);
+                                var response = String.Format("{0} has forfeited their fortification{1}It's {2}'s turn", author, Environment.NewLine, game.CurrentPlayer);
                                 await msg.Channel.SendMessageAsync(response);
                             }
                             else await msg.Channel.SendMessageAsync("It isn't your turn to fortify");
@@ -407,41 +451,44 @@ namespace Riskord
                     var rest = text.TextAfter("attack");
                     var parts = rest.Split(' ');
                     (string from, string target) = (parts[0], parts[1]);
-                    if (Game != null) // A game exists
+                    if (File.Exists(gamefile))
                     {
-                        if (Game.CurrentPlayer == author) // It's your turn
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        if (game.CurrentPlayer == author) // It's your turn
                         {
-                            if (Game.Players[Game.Turn].CanAttack) // Attack phase
+                            if (game.Players[game.Turn].CanAttack) // Attack phase
                             {
-                                if (Game.Board.Territories[from].PlayerName == author) // You own origin
+                                if (game.Board.Territories[from].PlayerName == author) // You own origin
                                 {
-                                    if (Game.Board.Territories[target].PlayerName != author) // You don't own target
+                                    if (game.Board.Territories[target].PlayerName != author) // You don't own target
                                     {
-                                        if (Game.Board.Territories[from].Troops > 1) // You have enough troops
+                                        if (game.Board.Territories[from].Troops > 1) // You have enough troops
                                         {
-                                            if (Game.Board.QAdjacent(from, target)) // The territories are adjacent
+                                            if (game.Board.QAdjacent(from, target)) // The territories are adjacent
                                             {
-                                                if (Game.Attack(from, target))
+                                                if (game.Attack(from, target))
                                                 {
                                                     // Need to fix this block
-                                                    foreach (Player p in Game.Players)
+                                                    foreach (Player p in game.Players)
                                                     {
                                                         var acc = false;
-                                                        foreach (KeyValuePair<string, ControlRecord> kvp in Game.Board.Territories)
+                                                        foreach (KeyValuePair<string, ControlRecord> kvp in game.Board.Territories)
                                                         {
                                                             if (kvp.Value.PlayerName == p.Name)
                                                                 acc = true;
                                                         }
                                                         if (!acc)
                                                         {
-                                                            Game.Players.RemoveAll(_p => _p.Name == p.Name);
+                                                            game.Players.RemoveAll(_p => _p.Name == p.Name);
                                                             var response = String.Format("{0} has been eliminated!", p.Name);
                                                             await msg.Channel.SendMessageAsync(response);
                                                         }
-                                                        if (Game.Players.Count < 2)
+                                                        if (game.Players.Count < 2)
                                                         {
                                                             var response = String.Format("{0} has eliminated all opponents!", author);
-                                                            Game = null;
+                                                            game = null;
+                                                            File.Delete(gamefile);
                                                             await msg.Channel.SendMessageAsync(response);
                                                         }
                                                     }
@@ -450,11 +497,13 @@ namespace Riskord
                                                 else
                                                 {
                                                     // Ouch, that sucks!  You're done for now
-                                                    Game.Players[Game.Turn].CanAttack = false;
-                                                    Game.Players[Game.Turn].CanFortify = true;
+                                                    game.Players[game.Turn].CanAttack = false;
+                                                    game.Players[game.Turn].CanFortify = true;
                                                     await msg.Channel.SendMessageAsync(author + " has been beaten!  They can no longer attack this turn");
                                                     await msg.Channel.SendMessageAsync("Time to fortify!");
                                                 }
+                                                var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
+                                                File.WriteAllText(gamefile, jsongame);
                                             }
                                             else await msg.Channel.SendMessageAsync("You can't attack a non-adjacent territory");
                                         }
@@ -475,29 +524,34 @@ namespace Riskord
                 {
                     var rest = text.TextAfter("fortify");
                     var parts = rest.Split(' ');
-                    if (Game != null) // A game exists
+                    if (File.Exists(gamefile))
                     {
-                        if (Game.CurrentPlayer == author) // It's your turn
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        if (game.CurrentPlayer == author) // It's your turn
                         {
-                            if (Game.Players[Game.Turn].CanFortify) // Fortification Phase
+                            if (game.Players[game.Turn].CanFortify) // Fortification Phase
                             {
                                 if (Int32.TryParse(parts[0], out int xtroops)) // Valid number
                                 {
                                     var path = new List<string>();
                                     for (int i = 1; i < parts.Length; i++)
                                     {
-                                        if (Game.Board.Territories.ContainsKey(parts[i])) // Territory exists
+                                        if (game.Board.Territories.ContainsKey(parts[i])) // Territory exists
                                         {
                                             path.Add(parts[i]);
                                         }
                                     }
-                                    if (Game.Fortify(Game.Turn, path, xtroops))
+                                    if (game.Fortify(game.Turn, path, xtroops))
                                     {
-                                        Game.Players[Game.Turn].CanFortify = false;
-                                        Game.AdvanceTurn();
+                                        game.Players[game.Turn].CanFortify = false;
+                                        game.AdvanceTurn();
                                         var response = String.Format("{0} has moved {1} troops from {2} to {3}", author, xtroops, parts[1], parts[parts.Length - 1]);
-                                        response += Environment.NewLine + String.Format("It's {0}'s turn", Game.CurrentPlayer);
+                                        response += Environment.NewLine + String.Format("It's {0}'s turn", game.CurrentPlayer);
                                         await msg.Channel.SendMessageAsync(response);
+
+                                        var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
+                                        File.WriteAllText(gamefile, jsongame);
                                     }
                                     else await msg.Channel.SendMessageAsync("Fortification failed - make sure your entire path is adjacent");
                                 }

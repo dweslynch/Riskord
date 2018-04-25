@@ -12,8 +12,9 @@ namespace Riskord
         public Dictionary<string, ControlRecord> Territories { get; set; }
         public List<string> Unclaimed { get; set; }
         public int Turn { get; set; } = 0;
+        public Dictionary<string, List<string>> Adjacency { get; set; }
 
-        private Dictionary<string, List<string>> adj;
+        public GameBuilder() { } // For serialization
 
         // Check for number of players before calling
         public GameBuilder(List<string> _players, Graph _graph)
@@ -22,7 +23,7 @@ namespace Riskord
             Territories = new Dictionary<string, ControlRecord>();
             Unclaimed = new List<string>(_graph.AdjacencyLists.Keys);
             Turn = 0;
-            adj = _graph.AdjacencyLists;
+            Adjacency = _graph.AdjacencyLists;
 
             var xtroops = XTroopsFromXPlayers(_players.Count);
             foreach (string s in _players)
@@ -74,7 +75,7 @@ namespace Riskord
             }
         }
 
-        public GameMaster Finalize() => new GameMaster(adj, Players, Territories);
+        public GameMaster Finalize() => new GameMaster(Adjacency, Players, Territories);
 
         public int XTroops(string playername)
         {
