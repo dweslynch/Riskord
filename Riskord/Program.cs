@@ -213,7 +213,7 @@ namespace Riskord
                 else if (text.Contains(" create map"))
                 {
                     var filename = msg.Channel.Id.ToString() + ".map.pdo";
-                    if ((!File.Exists(filename)) || qadmin) // Only let admins modify existing maps
+                    if ((!File.Exists(filename)))
                     {
                         var acc = text.AsLines().ToList();
                         acc.RemoveAt(0); // Ignore the `@riskord create map` line
@@ -222,7 +222,18 @@ namespace Riskord
                         File.WriteAllText(filename, jsongraph);
                         await msg.Channel.SendMessageAsync("New map created!");
                     }
-                    else await msg.Channel.SendMessageAsync("Only server administrators can overwrite existing maps");
+                    else await msg.Channel.SendMessageAsync("A map already exists for this channel...If you'd like to replace it, delete the old one first with `@Riskord delmap`");
+                }
+
+                else if (text.Contains(" delmap"))
+                {
+                    var filename = msg.Channel.Id.ToString() + ".map.pdo";
+                    if (File.Exists(filename))
+                    {
+                        File.Delete(filename);
+                        await msg.Channel.SendMessageAsync("Map deleted");
+                    }
+                    else await msg.Channel.SendMessageAsync("No map exists for this channel");
                 }
 
                 else if (text.Contains(" start game "))
@@ -231,24 +242,22 @@ namespace Riskord
                     var usrs = msg.MentionedUsers.Select(u => u.Username).Where(x => x != Client.CurrentUser.Username).ToList();
                     if (usrs.Count > 2) // Fix later
                     {
-                        var filename = msg.Channel.Id.ToString() + ".map.pdo";
-                        if (File.Exists(filename))
+                        var mapfile = msg.Channel.Id.ToString() + ".map.pdo";
+                        var filename = (File.Exists(mapfile)) ? mapfile : "default.map.pdo";
+                        var contents = File.ReadAllText(filename);
+                        var graph = JsonConvert.DeserializeObject<Graph>(contents);
+                        if ((!File.Exists(buildfile)) && (!File.Exists(gamefile))) // Might remove these checks later
                         {
-                            var contents = File.ReadAllText(filename);
-                            var graph = JsonConvert.DeserializeObject<Graph>(contents);
-                            if ((!File.Exists(buildfile)) && (!File.Exists(gamefile))) // Might remove these checks later
+                            var builder = new GameBuilder(usrs, graph);
+                            var jsonbuilder = JsonConvert.SerializeObject(builder, Formatting.Indented);
+                            File.WriteAllText(buildfile, jsonbuilder);
+                            string acc = "New game started with turn order @" + usrs[0];
+                            for (int i = 1; i < usrs.Count; i++)
                             {
-                                var builder = new GameBuilder(usrs, graph);
-                                var jsonbuilder = JsonConvert.SerializeObject(builder, Formatting.Indented);
-                                File.WriteAllText(buildfile, jsonbuilder);
-                                string acc = "New game started with turn order @" + usrs[0];
-                                for (int i = 1; i < usrs.Count; i++)
-                                {
-                                    acc += " -> @" + usrs[i];
-                                }
-                                await msg.Channel.SendMessageAsync(acc);
-                                await msg.Channel.SendMessageAsync("Setup phase starts now");
+                                acc += " -> @" + usrs[i];
                             }
+                            await msg.Channel.SendMessageAsync(acc);
+                            await msg.Channel.SendMessageAsync("Setup phase starts now");
                         }
                         else await msg.Channel.SendMessageAsync("No map file found for this server.  Create one with `@Riskord create map`");
                     }
