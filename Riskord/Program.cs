@@ -15,9 +15,6 @@ namespace Riskord
         const string TOKFILE = "token.k";
         public static void Main(string[] args)
         {
-            var _tcontent = File.ReadAllText("438503358001840128.game.pdo");
-            var _tgame = JsonConvert.DeserializeObject<GameMaster>(_tcontent);
-
             var riskbot = new RiskBot();
             riskbot.MainAsync().GetAwaiter().GetResult(); // Just let it run in background
 
