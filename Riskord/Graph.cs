@@ -58,10 +58,8 @@ namespace Riskord
             }
         }
 
-        public string ToJson()
-        {
-            return JsonConvert.SerializeObject(this, Formatting.Indented);
-        }
+        public string ToJson() =>
+            JsonConvert.SerializeObject(this, Formatting.Indented);
 
         public static Graph FromAdjacencyLines(IEnumerable<string> lines)
         {
@@ -76,7 +74,6 @@ namespace Riskord
                     graph.AddEdge(first, ts[i]);
                 }
             }
-
             return graph;
         }
     }

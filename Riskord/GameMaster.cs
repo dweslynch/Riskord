@@ -20,7 +20,13 @@ namespace Riskord
             get => Players[Turn].Name;
         }
 
-        public GameMaster() { } // For serialization
+        public GameMaster()
+        {
+            Board = new Board();
+            Players = new List<Player>();
+            Turn = 0;
+        }
+
         public GameMaster(Board b, List<Player> players)
         {
             this.Board = b;

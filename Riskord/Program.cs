@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using Newtonsoft.Json;
@@ -100,6 +99,7 @@ namespace Riskord
                             var response = String.Format("# of Troops for {0}:  {1}", author, xtroops);
                             await msg.Channel.SendMessageAsync(response);
                         }
+                        else await msg.Channel.SendMessageAsync("Player " + author + " is not listed for this game");
                     }
                     else if (File.Exists(buildfile))
                     {
@@ -111,6 +111,7 @@ namespace Riskord
                             var response = String.Format("# of Troops for {0}:  {1}", author, xtroops);
                             await msg.Channel.SendMessageAsync(response);
                         }
+                        else await msg.Channel.SendMessageAsync(author + " is not listed for this game");
                     }
                     else
                     {
@@ -123,7 +124,6 @@ namespace Riskord
                     if (File.Exists(gamefile))
                     {
                         var gamecontents = File.ReadAllText(gamefile);
-                        Console.WriteLine(gamecontents);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
                         var response = String.Format("Current Player:  {0}", game.CurrentPlayer);
                         await msg.Channel.SendMessageAsync(response);
@@ -205,8 +205,6 @@ namespace Riskord
                     }
                     else
                     {
-                        Console.WriteLine(buildfile);
-                        Console.WriteLine(gamefile);
                         await msg.Channel.SendMessageAsync("No game in progress");
                     }
                 }
@@ -242,23 +240,36 @@ namespace Riskord
                     await msg.Channel.SendMessageAsync("Current game deleted");
                 }
 
+                else if (text.Contains(" resetall"))
+                {
+                    if (File.Exists(buildfile))
+                        File.Delete(buildfile);
+                    if (File.Exists(gamefile))
+                        File.Delete(gamefile);
+                    if (File.Exists(mapfile))
+                        File.Delete(mapfile);
+                    await msg.Channel.SendMessageAsync("Channel files reset");
+                    // Add more as the game starts using more files
+                }
+
                 else if (text.Contains(" start game "))
                 {
                     // All users tagged in the message except ourselves
                     var usrs = msg.MentionedUsers.Select(u => u.Username).Where(x => x != Client.CurrentUser.Username).ToList();
-                    if (usrs.Count > 2) // Fix later
+                    if (usrs.Count > 2)
                     {
                         var filename = (File.Exists(mapfile)) ? mapfile : "default.map.pdo";
                         var contents = File.ReadAllText(filename);
                         var graph = JsonConvert.DeserializeObject<Graph>(contents);
-                        if ((!File.Exists(buildfile)) && (!File.Exists(gamefile))) // Might remove these checks later
+                        if ((!File.Exists(buildfile)) && (!File.Exists(gamefile)))
                         {
-                            var continents = new Dictionary<string, List<string>>();
-                            if (filename == "default.map.pdo")
+                            Dictionary<string, List<string>> continents;
+                            if (filename == "default.map.pdo") // If we're using the default map, use continents
                             {
                                 var _contents = File.ReadAllText("default.continents.pdo");
                                 continents = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(_contents);
                             }
+                            else continents = new Dictionary<string, List<string>>();
                             var builder = new GameBuilder(usrs, graph, continents);
                             var jsonbuilder = JsonConvert.SerializeObject(builder, Formatting.Indented);
                             File.WriteAllText(buildfile, jsonbuilder);
@@ -278,13 +289,13 @@ namespace Riskord
                 else if (text.Contains(" claim "))
                 {
                     var rest = text.TextAfter("claim");
-                    if (File.Exists(buildfile))
+                    if (File.Exists(buildfile)) // Setup phase
                     {
                         var buildcontents = File.ReadAllText(buildfile);
                         var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
-                        if (builder.Unclaimed.Contains(rest))
+                        if (builder.Unclaimed.Contains(rest)) // Territory is unclaimed
                         {
-                            if (builder.Players[builder.Turn].Name == author)
+                            if (builder.Players[builder.Turn].Name == author) // It's your turn
                             {
                                 builder.Claim(author, rest);
                                 await msg.Channel.SendMessageAsync(author + " has claimed " + rest);
@@ -346,7 +357,6 @@ namespace Riskord
                                                     game.Players[0].CanPlace = true;
                                                     var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
                                                     File.WriteAllText(gamefile, jsongame);
-                                                    // Game.Turn = -1; Game.AdvanceTurn();
                                                     await msg.Channel.SendMessageAsync("Setup phase has ended - it's " + game.CurrentPlayer + "'s turn");
                                                 }
                                             }
@@ -375,9 +385,9 @@ namespace Riskord
                                         if (game.Players.Exists(p => p.Name == author)) // Does the player exist?  Shouldn't be necessary
                                         {
                                             var player = game.Players[game.Turn];
-                                            if (player.XTroops >= xtroops)
+                                            if (player.XTroops >= xtroops) // Do they have enough troops?
                                             {
-                                                if (player.CanPlace)
+                                                if (player.CanPlace) // Can they place them?
                                                 {
                                                     player.XTroops -= xtroops;
                                                     game.Board.Territories[parts[0]].Troops += xtroops;
@@ -450,7 +460,7 @@ namespace Riskord
                         if (game.CurrentPlayer == author) // Is it your turn?
                         {
                             var player = game.Players[game.Turn];
-                            if (player.CanFortify)
+                            if (player.CanFortify) // Can you fortify?
                             {
                                 player.CanFortify = false;
                                 game.AdvanceTurn();
@@ -489,10 +499,10 @@ namespace Riskord
                                             {
                                                 if (game.Attack(from, target))
                                                 {
-                                                    // Need to fix this block
+                                                    // Need to fix this block to be more efficient
                                                     foreach (Player p in game.Players)
                                                     {
-                                                        var acc = false;
+                                                        var acc = false; // Do they own any territories?
                                                         foreach (KeyValuePair<string, ControlRecord> kvp in game.Board.Territories)
                                                         {
                                                             if (kvp.Value.PlayerName == p.Name)

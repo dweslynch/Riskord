@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Riskord
 {
@@ -11,11 +9,19 @@ namespace Riskord
         public List<Player> Players { get; set; }
         public Dictionary<string, ControlRecord> Territories { get; set; }
         public List<string> Unclaimed { get; set; }
-        public int Turn { get; set; } = 0;
+        public int Turn { get; set; }
         public Dictionary<string, List<string>> Adjacency { get; set; }
-        public Dictionary<string, List<string>> Continents { get; set; } = new Dictionary<string, List<string>>();
+        public Dictionary<string, List<string>> Continents { get; set; }
 
-        public GameBuilder() { } // For serialization
+        public GameBuilder()
+        {
+            Players = new List<Player>();
+            Territories = new Dictionary<string, ControlRecord>();
+            Unclaimed = new List<string>();
+            Turn = 0;
+            Adjacency = new Dictionary<string, List<string>>();
+            Continents = new Dictionary<string, List<string>>();
+        }
 
         // Check for number of players before calling
         public GameBuilder(List<string> _players, Graph _graph)
@@ -25,6 +31,7 @@ namespace Riskord
             Unclaimed = new List<string>(_graph.AdjacencyLists.Keys);
             Turn = 0;
             Adjacency = _graph.AdjacencyLists;
+            Continents = new Dictionary<string, List<string>>();
 
             var xtroops = XTroopsFromXPlayers(_players.Count);
             foreach (string s in _players)

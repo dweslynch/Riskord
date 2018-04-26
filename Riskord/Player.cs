@@ -24,26 +24,10 @@ namespace Riskord
             LastFrom = String.Empty;
         }
 
-        public Player(string _name, int _xtroops)
+        public Player(string _name, int _xtroops) : this()
         {
             Name = _name;
             XTroops = _xtroops;
-            CanPlace = false;
-            CanAttack = false;
-            CanFortify = false;
-            CanDraw = false;
-            LastFrom = String.Empty;
-        }
-
-        public Player(string _name, int _xtroops, bool _place, bool _attack, bool _fortify, bool _draw)
-        {
-            Name = _name;
-            XTroops = _xtroops;
-            CanPlace = _place;
-            CanAttack = _attack;
-            CanFortify = _fortify;
-            CanDraw = _draw;
-            LastFrom = String.Empty;
         }
     }
 }
