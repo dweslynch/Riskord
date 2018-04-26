@@ -7,21 +7,32 @@ namespace Riskord
     {
         public string Name { get; set; }
         public int XTroops { get; set; }
-        public bool CanPlace { get; set; } = false;
-        public bool CanAttack { get; set; } = false;
-        public bool CanFortify { get; set; } = false;
-        public bool CanDraw { get; set; } = false;
+        public bool CanPlace { get; set; }
+        public bool CanAttack { get; set; }
+        public bool CanFortify { get; set; }
+        public bool CanDraw { get; set; }
+        public string LastFrom { get; set; }
 
         public Player()
         {
             Name = String.Empty;
             XTroops = 0;
+            CanPlace = false;
+            CanAttack = false;
+            CanFortify = false;
+            CanDraw = false;
+            LastFrom = String.Empty;
         }
 
         public Player(string _name, int _xtroops)
         {
             Name = _name;
             XTroops = _xtroops;
+            CanPlace = false;
+            CanAttack = false;
+            CanFortify = false;
+            CanDraw = false;
+            LastFrom = String.Empty;
         }
 
         public Player(string _name, int _xtroops, bool _place, bool _attack, bool _fortify, bool _draw)
@@ -32,6 +43,7 @@ namespace Riskord
             CanAttack = _attack;
             CanFortify = _fortify;
             CanDraw = _draw;
+            LastFrom = String.Empty;
         }
     }
 }

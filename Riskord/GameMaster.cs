@@ -13,26 +13,25 @@ namespace Riskord
 
         public Board Board { get; set; }
         public List<Player> Players { get; set; }
-        public int Turn { get; set; } = 0;
+        public int Turn { get; set; }
 
         public String CurrentPlayer
         {
             get => Players[Turn].Name;
         }
 
-        public GameMaster()
-        {
-            Players = new List<Player>();
-        } // For serialization
+        public GameMaster() { } // For serialization
         public GameMaster(Board b, List<Player> players)
         {
             this.Board = b;
             this.Players = players;
+            this.Turn = 0;
         }
         public GameMaster(Dictionary<string, List<string>> adj, List<Player> players, Dictionary<string, ControlRecord> territories, Dictionary<string, List<string>> cont)
         {
             this.Board = new Board(adj, territories, cont);
             this.Players = players;
+            this.Turn = 0;
         }
 
         private bool HasTerritory(string player, string territory) =>
@@ -181,9 +180,13 @@ namespace Riskord
             }
 
             if (Board.Territories[target].Troops <= 0)
+            {
+                // Transfer ownership
+                Board.Territories[target].PlayerName = Board.Territories[from].PlayerName;
+                Players[Turn].LastFrom = from;
                 return true;
-            else
-                return false;
+            }
+            else return false;
         }
     }
 }

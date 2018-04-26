@@ -15,6 +15,8 @@ namespace Riskord
         const string TOKFILE = "token.k";
         public static void Main(string[] args)
         {
+            var _tcontent = File.ReadAllText("438503358001840128.game.pdo");
+            var _tgame = JsonConvert.DeserializeObject<GameMaster>(_tcontent);
 
             var riskbot = new RiskBot();
             riskbot.MainAsync().GetAwaiter().GetResult(); // Just let it run in background
@@ -588,6 +590,36 @@ namespace Riskord
                             else await msg.Channel.SendMessageAsync("It's not your turn to fortify");
                         }
                         else await msg.Channel.SendMessageAsync("You can't fortify out of turn");
+                    }
+                    else await msg.Channel.SendMessageAsync("No game in progress");
+                }
+
+                else if (text.Contains(" mv "))
+                {
+                    var rest = text.TextAfter("mv");
+                    if (File.Exists(gamefile))
+                    {
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        if (game.CurrentPlayer == author)
+                        {
+                            var targets = game.Board.Territories.Where(kvp => kvp.Value.Troops == 0).ToList();
+                            if (targets.Count > 0)
+                            {
+                                if (Int32.TryParse(rest, out int xtroops))
+                                {
+                                    game.Board.Territories[game.Players[game.Turn].LastFrom].Troops -= xtroops;
+                                    game.Board.Territories[targets[0].Key].Troops += xtroops;
+                                    var response = String.Format("Moved {0} troops from {1} to {2}", xtroops, game.Players[game.Turn].LastFrom, targets[0].Key);
+                                    await msg.Channel.SendMessageAsync(response);
+                                    var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
+                                    File.WriteAllText(gamefile, jsongame);
+                                }
+                                else await msg.Channel.SendMessageAsync("Ya screwed up the formatting...try `@Riskord mv [amount]`");
+                            }
+                            else await msg.Channel.SendMessageAsync("You have to capture a territory before moving troops there");
+                        }
+                        else await msg.Channel.SendMessageAsync("You can only do this on your turn");
                     }
                     else await msg.Channel.SendMessageAsync("No game in progress");
                 }
