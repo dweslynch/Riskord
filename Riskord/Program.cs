@@ -75,6 +75,7 @@ namespace Riskord
             var channelid = msg.Channel.Id.ToString();
             var buildfile = String.Format("{0}.builder.pdo", channelid);
             var gamefile = String.Format("{0}.game.pdo", channelid);
+            var mapfile = String.Format("{0}.map.pdo", channelid);
 
             if (TaggedIn(msg, Client.CurrentUser.Username))
             {
@@ -213,7 +214,7 @@ namespace Riskord
                 else if (text.Contains(" create map"))
                 {
                     var filename = msg.Channel.Id.ToString() + ".map.pdo";
-                    if ((!File.Exists(filename)))
+                    if (!File.Exists(filename))
                     {
                         var acc = text.AsLines().ToList();
                         acc.RemoveAt(0); // Ignore the `@riskord create map` line
@@ -227,13 +228,18 @@ namespace Riskord
 
                 else if (text.Contains(" delmap"))
                 {
-                    var filename = msg.Channel.Id.ToString() + ".map.pdo";
-                    if (File.Exists(filename))
-                    {
-                        File.Delete(filename);
-                        await msg.Channel.SendMessageAsync("Map deleted");
-                    }
-                    else await msg.Channel.SendMessageAsync("No map exists for this channel");
+                    if (File.Exists(mapfile))
+                        File.Delete(mapfile);
+                    await msg.Channel.SendMessageAsync("Map reset");
+                }
+
+                else if (text.Contains(" delgame"))
+                {
+                    if (File.Exists(buildfile))
+                        File.Delete(buildfile);
+                    if (File.Exists(gamefile))
+                        File.Delete(gamefile);
+                    await msg.Channel.SendMessageAsync("Current game deleted");
                 }
 
                 else if (text.Contains(" start game "))
@@ -242,13 +248,18 @@ namespace Riskord
                     var usrs = msg.MentionedUsers.Select(u => u.Username).Where(x => x != Client.CurrentUser.Username).ToList();
                     if (usrs.Count > 2) // Fix later
                     {
-                        var mapfile = msg.Channel.Id.ToString() + ".map.pdo";
                         var filename = (File.Exists(mapfile)) ? mapfile : "default.map.pdo";
                         var contents = File.ReadAllText(filename);
                         var graph = JsonConvert.DeserializeObject<Graph>(contents);
                         if ((!File.Exists(buildfile)) && (!File.Exists(gamefile))) // Might remove these checks later
                         {
-                            var builder = new GameBuilder(usrs, graph);
+                            var continents = new Dictionary<string, List<string>>();
+                            if (filename == "default.map.pdo")
+                            {
+                                var _contents = File.ReadAllText("default.continents.pdo");
+                                continents = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(_contents);
+                            }
+                            var builder = new GameBuilder(usrs, graph, continents);
                             var jsonbuilder = JsonConvert.SerializeObject(builder, Formatting.Indented);
                             File.WriteAllText(buildfile, jsonbuilder);
                             string acc = "New game started with turn order @" + usrs[0];
@@ -259,7 +270,7 @@ namespace Riskord
                             await msg.Channel.SendMessageAsync(acc);
                             await msg.Channel.SendMessageAsync("Setup phase starts now");
                         }
-                        else await msg.Channel.SendMessageAsync("No map file found for this server.  Create one with `@Riskord create map`");
+                        else await msg.Channel.SendMessageAsync("There's already a game in progress - end it with `@Riskord end game` before starting a new one");
                     }
                     else await msg.Channel.SendMessageAsync("You need at least 3 players to start a game");
                 }

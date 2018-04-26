@@ -13,6 +13,7 @@ namespace Riskord
         public List<string> Unclaimed { get; set; }
         public int Turn { get; set; } = 0;
         public Dictionary<string, List<string>> Adjacency { get; set; }
+        public Dictionary<string, List<string>> Continents { get; set; } = new Dictionary<string, List<string>>();
 
         public GameBuilder() { } // For serialization
 
@@ -31,6 +32,11 @@ namespace Riskord
                 var player = new Player(s, xtroops);
                 Players.Add(player);
             }
+        }
+
+        public GameBuilder(List<string> _players, Graph _graph, Dictionary<string, List<string>> _cont) : this(_players, _graph)
+        {
+            Continents = _cont;
         }
 
         // Check that player exists and territory is unclaimed before calling
@@ -75,7 +81,7 @@ namespace Riskord
             }
         }
 
-        public GameMaster Finalize() => new GameMaster(Adjacency, Players, Territories);
+        public GameMaster Finalize() => new GameMaster(Adjacency, Players, Territories, Continents);
 
         public int XTroops(string playername)
         {

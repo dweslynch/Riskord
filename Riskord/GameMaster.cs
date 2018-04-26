@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
+using System.IO;
 
 namespace Riskord
 {
     public class GameMaster
     {
         private Random randy = new Random();
+        private Dictionary<string, int> continentvalues = JsonConvert.DeserializeObject<Dictionary<string, int>>(File.ReadAllText("default.values.pdo"));
 
         public Board Board { get; set; }
         public List<Player> Players { get; set; }
@@ -23,11 +26,17 @@ namespace Riskord
             this.Board = b;
             this.Players = players;
         }
-        public GameMaster(Dictionary<string, List<string>> adj, List<Player> players, Dictionary<string, ControlRecord> territories)
+        public GameMaster(Dictionary<string, List<string>> adj, List<Player> players, Dictionary<string, ControlRecord> territories, Dictionary<string, List<string>> cont)
         {
-            this.Board = new Board(adj, territories);
+            this.Board = new Board(adj, territories, cont);
             this.Players = players;
         }
+
+        private bool HasTerritory(string player, string territory) =>
+            Board.Territories[territory].PlayerName == player;
+
+        private bool HasTerritory(int iplayer, string territory) =>
+            Board.Territories[territory].PlayerName == Players[iplayer].Name;
 
         private int PlayerIndexFromName(string name) =>
             Players.FindIndex(prop => prop.Name == name);
@@ -84,6 +93,19 @@ namespace Riskord
             }
         }
 
+        private int ContinentBonus(int iplayer)
+        {
+            var acc = 0;
+            foreach (KeyValuePair<string, List<string>> kvp in Board.Continents)
+            {
+                if (kvp.Value.TrueForAll(x => HasTerritory(iplayer, x)))
+                {
+                    acc += continentvalues[kvp.Key];
+                }
+            }
+            return acc;
+        }
+
         public void AdvanceTurn()
         {
             Turn++;
@@ -98,7 +120,7 @@ namespace Riskord
         }
 
         public int XTroops(int iplayer) =>
-            Bonus(XTerritories(iplayer));
+            Bonus(XTerritories(iplayer)) + ContinentBonus(iplayer);
 
         // Have to check eligibility before calling these
 
