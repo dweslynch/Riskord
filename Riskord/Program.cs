@@ -127,14 +127,7 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         Console.WriteLine(gamecontents);
-                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents); // Silently failing...
-                        // It doesn't throw an exception, but it never executes the next line (tested by putting console.writelines before and after)
-                        // Maybe it's somehow getting hung up on the serialization?  Will google it.  Weird that it deosn't throw an error though
-                        // What's also super weird is even though it doesn't execute the rest of the code, pausing it after the issue occurs indicates that we're back in the loop inside `static void Main(string[] args)`
-                        // When I set a breakpoint at the above line the local window lists a variable p with a null reference exception
-                        // I've used 'p' so much I have no clue where to start
-                        // Oh, now it gets weirder.  Turns out I never use a variable p in the GameMaster class
-                        // Or the Board class.  Or the Graph class.  Or even the Player class
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
                         var response = String.Format("Current Player:  {0}", game.CurrentPlayer);
                         await msg.Channel.SendMessageAsync(response);
                     }
