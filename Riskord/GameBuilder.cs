@@ -24,7 +24,7 @@ namespace Riskord
         }
 
         // Check for number of players before calling
-        public GameBuilder(List<string> _players, Graph _graph)
+        public GameBuilder(List<ulong> _players, Graph _graph)
         {
             Players = new List<Player>();
             Territories = new Dictionary<string, ControlRecord>();
@@ -34,32 +34,31 @@ namespace Riskord
             Continents = new Dictionary<string, List<string>>();
 
             var xtroops = XTroopsFromXPlayers(_players.Count);
-            foreach (string s in _players)
+            foreach (ulong uid in _players)
             {
-                var player = new Player(s, xtroops);
+                var player = new Player(uid, xtroops);
                 Players.Add(player);
             }
         }
 
-        public GameBuilder(List<string> _players, Graph _graph, Dictionary<string, List<string>> _cont) : this(_players, _graph)
+        public GameBuilder(List<ulong> _players, Graph _graph, Dictionary<string, List<string>> _cont) : this(_players, _graph)
         {
             Continents = _cont;
         }
 
         // Check that player exists and territory is unclaimed before calling
         // This function does test for this, but doesn't give feedback
-        public void Claim(string playername, string territory)
+        public void Claim(ulong id, string territory)
         {
-            if (Players.Exists(x => x.Name == playername))
+            if (Players.Exists(x => x.Id == id))
             {
-                if (Players.FindIndex(x => x.Name == playername) == Turn)
+                if (Players.FindIndex(x => x.Id == id) == Turn)
                 {
                     if (Unclaimed.Contains(territory))
                     {
                         var cr = new ControlRecord();
-                        cr.PlayerName = playername;
+                        cr.Id = id;
                         cr.Troops = 1;
-                        // var _player = Players.Where(p => p.Name == playername).ToList()[0];
                         Players[Turn].XTroops -= 1;
                         Unclaimed.Remove(territory);
                         Territories.Add(territory, cr);
@@ -69,15 +68,15 @@ namespace Riskord
             }
         }
 
-        public void AddTroops(string playername, string territory, int xtroops)
+        public void AddTroops(ulong id, string territory, int xtroops)
         {
             if (Unclaimed.Count == 0)
             {
-                if (Players.Exists(x => x.Name == playername))
+                if (Players.Exists(x => x.Id == id))
                 {
-                    if (Territories.ContainsKey(territory) && Territories[territory].PlayerName == playername)
+                    if (Territories.ContainsKey(territory) && Territories[territory].Id == id)
                     {
-                        var _player = Players.Where(p => p.Name == playername).ToList()[0];
+                        var _player = Players.Where(p => p.Id == id).ToList()[0];
                         if (_player.XTroops >= xtroops)
                         {
                             Territories[territory].Troops += xtroops;
@@ -90,11 +89,11 @@ namespace Riskord
 
         public GameMaster Finalize() => new GameMaster(Adjacency, Players, Territories, Continents);
 
-        public int XTroops(string playername)
+        public int XTroops(ulong id)
         {
-            if (Players.Exists(x => x.Name == playername))
+            if (Players.Exists(x => x.Id == id))
             {
-                var _player = Players.Where(p => p.Name == playername).ToList()[0];
+                var _player = Players.Where(p => p.Id == id).ToList()[0];
                 return _player.XTroops;
             }
             else return 0;

@@ -15,9 +15,14 @@ namespace Riskord
         public List<Player> Players { get; set; }
         public int Turn { get; set; }
 
-        public String CurrentPlayer
+        public ulong CurrentPlayer
         {
-            get => Players[Turn].Name;
+            get => Players[Turn].Id;
+        }
+
+        public String CurrentUsername
+        {
+            get => Player.Lookup(CurrentPlayer);
         }
 
         public GameMaster()
@@ -40,17 +45,17 @@ namespace Riskord
             this.Turn = 0;
         }
 
-        private bool HasTerritory(string player, string territory) =>
-            Board.Territories[territory].PlayerName == player;
+        private bool HasTerritory(ulong id, string territory) =>
+            Board.Territories[territory].Id == id;
 
         private bool HasTerritory(int iplayer, string territory) =>
-            Board.Territories[territory].PlayerName == Players[iplayer].Name;
+            Board.Territories[territory].Id == Players[iplayer].Id;
 
-        private int PlayerIndexFromName(string name) =>
-            Players.FindIndex(prop => prop.Name == name);
+        private int PlayerIndexFromId(ulong id) =>
+            Players.FindIndex(x => x.Id == id);
 
         private int XTerritories(int iplayer) =>
-            Board.Territories.Values.Where(t => t.PlayerName == Players[iplayer].Name).Count();
+            Board.Territories.Values.Where(t => t.Id == Players[iplayer].Id).Count();
 
         private int Bonus(int xterr)
         {
@@ -138,7 +143,7 @@ namespace Riskord
                 return Players[iplayer].XTroops;
             else
             {
-                if (Board.Territories[terr].PlayerName == Players[iplayer].Name)
+                if (Board.Territories[terr].Id == Players[iplayer].Id)
                 {
                     Board.Territories[terr].Troops += xtroops;
                     Players[iplayer].XTroops -= xtroops;
@@ -150,7 +155,7 @@ namespace Riskord
 
         public bool Fortify(int iplayer, List<string> path, int xtroops)
         {
-            if (path.TrueForAll(terr => Board.Territories[terr].PlayerName == Players[iplayer].Name))
+            if (path.TrueForAll(terr => Board.Territories[terr].Id == Players[iplayer].Id))
             {
                 var okay = true;
                 for (int i = 1; i < path.Count; i++)
@@ -188,7 +193,7 @@ namespace Riskord
             if (Board.Territories[target].Troops <= 0)
             {
                 // Transfer ownership
-                Board.Territories[target].PlayerName = Board.Territories[from].PlayerName;
+                Board.Territories[target].Id = Board.Territories[from].Id;
                 Players[Turn].LastFrom = from;
                 return true;
             }

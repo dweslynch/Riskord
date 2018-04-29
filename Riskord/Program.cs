@@ -37,6 +37,8 @@ namespace Riskord
     public class RiskBot
     {
         const string TOKFILE = "token.k";
+        const string IDFILE = "ids.pdo";
+
         Random randy = new Random();
 
         private string Token
@@ -59,6 +61,13 @@ namespace Riskord
             return false;
         }
 
+        // Gets snapshot of ids
+        public static Dictionary<ulong, string> GrabIds()
+        {
+            var contents = File.ReadAllText(IDFILE);
+            return JsonConvert.DeserializeObject<Dictionary<ulong, string>>(contents);
+        }
+
         public static Task Log(LogMessage msg)
         {
             Console.WriteLine("Logging : " + msg);
@@ -68,6 +77,7 @@ namespace Riskord
         public async Task MessageReceived(SocketMessage msg)
         {
             var author = msg.Author.Username;
+            var uid = msg.Author.Id;
             var text = msg.Content;
             var qadmin = (msg.Author is SocketGuildUser) ? (msg.Author as SocketGuildUser).GuildPermissions.Administrator : false;
             var channelid = msg.Channel.Id.ToString();
@@ -91,10 +101,10 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.Players.Exists(p => p.Name == author))
+                        if (game.Players.Exists(p => p.Id == uid))
                         {
                             // Find the author
-                            var player = game.Players.Where(p => p.Name == author).ToList()[0];
+                            var player = game.Players.Where(p => p.Id == uid).ToList()[0];
                             xtroops = player.XTroops;
                             var response = String.Format("# of Troops for {0}:  {1}", author, xtroops);
                             await msg.Channel.SendMessageAsync(response);
@@ -105,9 +115,9 @@ namespace Riskord
                     {
                         var buildcontents = File.ReadAllText(buildfile);
                         var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
-                        if (builder.Players.Exists(p => p.Name == author))
+                        if (builder.Players.Exists(p => p.Id == uid))
                         {
-                            xtroops = builder.XTroops(author);
+                            xtroops = builder.XTroops(uid);
                             var response = String.Format("# of Troops for {0}:  {1}", author, xtroops);
                             await msg.Channel.SendMessageAsync(response);
                         }
@@ -132,8 +142,9 @@ namespace Riskord
                     {
                         var buildcontents = File.ReadAllText(buildfile);
                         var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
-                        var turn = builder.Players[builder.Turn].Name;
-                        var response = String.Format("Current Player:  {0}", turn);
+                        var turn = builder.Players[builder.Turn].Id;
+                        var name = Player.Lookup(turn);
+                        var response = String.Format("Current Player:  {0}", name);
                         await msg.Channel.SendMessageAsync(response);
                     }
                     else
@@ -158,7 +169,7 @@ namespace Riskord
                             phase = "Fortify";
                         else if (player.CanDraw)
                             phase = "Draw"; // Shouldn't happen yet
-                        var response = String.Format("It's {0}'s turn to {1}", player.Name, phase);
+                        var response = String.Format("It's {0}'s turn to {1}", Player.Lookup(player.Id), phase);
                         await msg.Channel.SendMessageAsync(response);
                     }
                     else await msg.Channel.SendMessageAsync("No game in progress");
@@ -193,13 +204,14 @@ namespace Riskord
                     {
                         var buildcontents = File.ReadAllText(buildfile);
                         var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
-                        var acc = "Current Turn:  " + builder.Players[builder.Turn].Name + Environment.NewLine;
+                        var currentplayerid = builder.Players[builder.Turn].Id;
+                        var acc = "Current Turn:  " + Player.Lookup(currentplayerid) + Environment.NewLine;
                         acc += "```fs" + Environment.NewLine;
                         acc += String.Format("{0,-15}  {1,7}  {2}", "Territory", "Troops", "Player");
                         acc += Environment.NewLine;
                         foreach (KeyValuePair<string, ControlRecord> kvp in builder.Territories)
                         {
-                            acc += String.Format("{0,-15}  {1,7}  {2}", kvp.Key, kvp.Value.Troops, "\"" + kvp.Value.PlayerName + "\"");
+                            acc += String.Format("{0,-15}  {1,7}  {2}", kvp.Key, kvp.Value.Troops, "\"" + Player.Lookup(kvp.Value.Id) + "\"");
                             acc += Environment.NewLine;
                         }
                         foreach (var s in builder.Unclaimed)
@@ -261,9 +273,21 @@ namespace Riskord
 
                 else if (text.Contains(" start game "))
                 {
+                    var snapshot = GrabIds();
+
                     // All users tagged in the message except ourselves
-                    var usrs = msg.MentionedUsers.Select(u => u.Username).Where(x => x != Client.CurrentUser.Username).ToList();
-                    if (usrs.Count > 2)
+                    var socketusers = msg.MentionedUsers.Where(u => u.Id != Client.CurrentUser.Id).ToList();
+                    var usrids = new List<ulong>();
+                    foreach (var usr in socketusers)
+                    {
+                        if (snapshot.ContainsKey(usr.Id))
+                            snapshot[usr.Id] = usr.Username; // Update username
+                        else snapshot.Add(usr.Id, usr.Username); // Add to dictionary
+                    }
+                    var jsonsnap = JsonConvert.SerializeObject(snapshot, Formatting.Indented);
+                    File.WriteAllText(IDFILE, jsonsnap);
+
+                    if (usrids.Count > 2)
                     {
                         var filename = (File.Exists(mapfile)) ? mapfile : "default.map.pdo";
                         var contents = File.ReadAllText(filename);
@@ -277,13 +301,14 @@ namespace Riskord
                                 continents = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(_contents);
                             }
                             else continents = new Dictionary<string, List<string>>();
-                            var builder = new GameBuilder(usrs, graph, continents);
+                            var builder = new GameBuilder(usrids, graph, continents);
                             var jsonbuilder = JsonConvert.SerializeObject(builder, Formatting.Indented);
                             File.WriteAllText(buildfile, jsonbuilder);
-                            string acc = "New game started with turn order @" + usrs[0];
-                            for (int i = 1; i < usrs.Count; i++)
+
+                            string acc = "New game started with turn order @" + snapshot[usrids[0]];
+                            for (int i = 1; i < usrids.Count; i++)
                             {
-                                acc += " -> @" + usrs[i];
+                                acc += " -> @" + snapshot[usrids[i]];
                             }
                             await msg.Channel.SendMessageAsync(acc);
                             await msg.Channel.SendMessageAsync("Setup phase starts now");
@@ -302,9 +327,9 @@ namespace Riskord
                         var builder = JsonConvert.DeserializeObject<GameBuilder>(buildcontents);
                         if (builder.Unclaimed.Contains(rest)) // Territory is unclaimed
                         {
-                            if (builder.Players[builder.Turn].Name == author) // It's your turn
+                            if (builder.Players[builder.Turn].Id == uid) // It's your turn
                             {
-                                builder.Claim(author, rest);
+                                builder.Claim(uid, rest);
                                 await msg.Channel.SendMessageAsync(author + " has claimed " + rest);
                                 if (builder.Unclaimed.Count == 0)
                                 {
@@ -334,12 +359,12 @@ namespace Riskord
                             {
                                 if (builder.Territories.ContainsKey(parts[0])) // Territory exists
                                 {
-                                    if (builder.Territories[parts[0]].PlayerName == author) // You own it
+                                    if (builder.Territories[parts[0]].Id == uid) // You own it
                                     {
-                                        if (builder.Players.Exists(p => p.Name == author)) // Does the player exist?  Shouldn't be necessary but whatever
+                                        if (builder.Players.Exists(p => p.Id == uid)) // Does the player exist?  Shouldn't be necessary but whatever
                                         {
-                                            // Get the first (only) element from a list of players whose names match author's name
-                                            var player = builder.Players.Where(p => p.Name == author).ToList()[0];
+                                            // Get the first (only) element from a list of players whose ids match author's id
+                                            var player = builder.Players.Where(p => p.Id == uid).ToList()[0];
                                             if (player.XTroops >= xtroops) // Do they have enough troops?
                                             {
                                                 player.XTroops -= xtroops;
@@ -383,13 +408,13 @@ namespace Riskord
                         var parts = rest.Split(' ');
                         if (parts.Length == 2 && Int32.TryParse(parts[1], out int xtroops))
                         {
-                            if (game.CurrentPlayer == author) // It's your turn
+                            if (game.Players[game.Turn].Id == uid) // It's your turn
                             {
                                 if (game.Board.Territories.ContainsKey(parts[0])) // Territory exists
                                 {
-                                    if (game.Board.Territories[parts[0]].PlayerName == author) // You own it
+                                    if (game.Board.Territories[parts[0]].Id == uid) // You own it
                                     {
-                                        if (game.Players.Exists(p => p.Name == author)) // Does the player exist?  Shouldn't be necessary
+                                        if (game.Players.Exists(p => p.Id == uid)) // Does the player exist?  Shouldn't be necessary
                                         {
                                             var player = game.Players[game.Turn];
                                             if (player.XTroops >= xtroops) // Do they have enough troops?
@@ -439,7 +464,7 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.CurrentPlayer == author) // Is it your turn?
+                        if (game.Players[game.Turn].Id == uid) // Is it your turn?
                         {
                             var player = game.Players[game.Turn];
                             if (player.CanAttack) // Can you attack?
@@ -464,7 +489,7 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.CurrentPlayer == author) // Is it your turn?
+                        if (game.Players[game.Turn].Id == uid) // Is it your turn?
                         {
                             var player = game.Players[game.Turn];
                             if (player.CanFortify) // Can you fortify?
@@ -492,13 +517,13 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.CurrentPlayer == author) // It's your turn
+                        if (game.Players[game.Turn].Id == uid) // It's your turn
                         {
                             if (game.Players[game.Turn].CanAttack) // Attack phase
                             {
-                                if (game.Board.Territories[from].PlayerName == author) // You own origin
+                                if (game.Board.Territories[from].Id == uid) // You own origin
                                 {
-                                    if (game.Board.Territories[target].PlayerName != author) // You don't own target
+                                    if (game.Board.Territories[target].Id != uid) // You don't own target
                                     {
                                         if (game.Board.Territories[from].Troops > 1) // You have enough troops
                                         {
@@ -512,13 +537,13 @@ namespace Riskord
                                                         var acc = false; // Do they own any territories?
                                                         foreach (KeyValuePair<string, ControlRecord> kvp in game.Board.Territories)
                                                         {
-                                                            if (kvp.Value.PlayerName == p.Name)
+                                                            if (kvp.Value.Id == p.Id)
                                                                 acc = true;
                                                         }
                                                         if (!acc)
                                                         {
-                                                            game.Players.RemoveAll(_p => _p.Name == p.Name);
-                                                            var response = String.Format("{0} has been eliminated!", p.Name);
+                                                            game.Players.RemoveAll(_p => _p.Id == p.Id);
+                                                            var response = String.Format("{0} has been eliminated!", Player.Lookup(p.Id));
                                                             await msg.Channel.SendMessageAsync(response);
                                                         }
                                                         if (game.Players.Count < 2)
@@ -565,7 +590,7 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.CurrentPlayer == author) // It's your turn
+                        if (game.Players[game.Turn].Id == uid) // It's your turn
                         {
                             if (game.Players[game.Turn].CanFortify) // Fortification Phase
                             {
@@ -608,7 +633,7 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.CurrentPlayer == author)
+                        if (game.Players[game.Turn].Id == uid)
                         {
                             var targets = game.Board.Territories.Where(kvp => kvp.Value.Troops == 0).ToList();
                             if (targets.Count > 0)

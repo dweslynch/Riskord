@@ -1,11 +1,14 @@
 ﻿using System;
+using System.IO;
+using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace Riskord
 {
 
     public class Player
     {
-        public string Name { get; set; }
+        public ulong Id { get; set; }
         public int XTroops { get; set; }
         public bool CanPlace { get; set; }
         public bool CanAttack { get; set; }
@@ -15,7 +18,7 @@ namespace Riskord
 
         public Player()
         {
-            Name = String.Empty;
+            Id = 0L;
             XTroops = 0;
             CanPlace = false;
             CanAttack = false;
@@ -24,10 +27,17 @@ namespace Riskord
             LastFrom = String.Empty;
         }
 
-        public Player(string _name, int _xtroops) : this()
+        public Player(ulong _id, int _xtroops) : this()
         {
-            Name = _name;
+            Id = _id;
             XTroops = _xtroops;
+        }
+
+        public static string Lookup(ulong id)
+        {
+            var contents = File.ReadAllText("ids.pdo");
+            var players = JsonConvert.DeserializeObject<Dictionary<ulong, string>>(contents);
+            return players[id];
         }
     }
 }

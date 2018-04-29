@@ -38,12 +38,12 @@ namespace Riskord
 
     public class ControlRecord
     {
-        public string PlayerName { get; set; }
+        public ulong Id { get; set; }
         public int Troops { get; set; }
 
         public ControlRecord()
         {
-            PlayerName = String.Empty;
+            Id = 0L;
             Troops = 0;
         }
     }
@@ -69,19 +69,19 @@ namespace Riskord
                 new SolidBrush(Color.Teal)
             };
 
-            var players = new List<string>();
+            var players = new List<ulong>();
 
             // Pass one
             foreach (KeyValuePair<string, ControlRecord> kvp in board.Territories)
             {
-                if (!players.Contains(kvp.Value.PlayerName))
-                    players.Add(kvp.Value.PlayerName);
+                if (!players.Contains(kvp.Value.Id))
+                    players.Add(kvp.Value.Id);
             }
 
             // Pass two
             foreach (KeyValuePair<string, ControlRecord> kvp in board.Territories)
             {
-                var iplayer = players.IndexOf(kvp.Value.PlayerName);
+                var iplayer = players.IndexOf(kvp.Value.Id);
                 var brush = brushes[iplayer];
                 var txt = kvp.Value.Troops.ToString();
                 (float x, float y) = coords[kvp.Key];
