@@ -171,6 +171,12 @@ namespace Riskord
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
                         var acc = "Current Turn:  " + game.CurrentPlayer + Environment.NewLine;
+                        var filename = channelid + ".graph.png";
+
+                        game.Board.ToGraphicalRepresentation(channelid);
+
+                        await msg.Channel.SendFileAsync(filename);
+                        /*
                         acc += "```fs" + Environment.NewLine;
                         acc += String.Format("{0,-15}  {1,7}  {2}", "Territory", "Troops", "Player");
                         acc += Environment.NewLine;
@@ -181,6 +187,7 @@ namespace Riskord
                         }
                         acc += "```";
                         await msg.Channel.SendMessageAsync(acc);
+                        */
                     }
                     else if (File.Exists(buildfile))
                     {

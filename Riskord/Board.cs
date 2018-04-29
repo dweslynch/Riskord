@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using Newtonsoft.Json;
 
 namespace Riskord
 {
@@ -42,6 +45,55 @@ namespace Riskord
         {
             PlayerName = String.Empty;
             Troops = 0;
+        }
+    }
+
+    public static class MapExtensions
+    {
+        public static void ToGraphicalRepresentation(this Board board, string namenoex)
+        {
+            var jsoncoords = File.ReadAllText("coords.pdo");
+            var coords = JsonConvert.DeserializeObject<Dictionary<string, (float, float)>>(jsoncoords);
+
+            var img = Image.FromFile("mapblank.png");
+            var graphics = Graphics.FromImage(img);
+            var font = new Font("Arial", 80, FontStyle.Bold);
+
+            var brushes = new List<SolidBrush>
+            {
+                new SolidBrush(Color.Black),
+                new SolidBrush(Color.Blue),
+                new SolidBrush(Color.Orange),
+                new SolidBrush(Color.Green),
+                new SolidBrush(Color.Red),
+                new SolidBrush(Color.Teal)
+            };
+
+            var players = new List<string>();
+
+            // Pass one
+            foreach (KeyValuePair<string, ControlRecord> kvp in board.Territories)
+            {
+                if (!players.Contains(kvp.Value.PlayerName))
+                    players.Add(kvp.Value.PlayerName);
+            }
+
+            // Pass two
+            foreach (KeyValuePair<string, ControlRecord> kvp in board.Territories)
+            {
+                var iplayer = players.IndexOf(kvp.Value.PlayerName);
+                var brush = brushes[iplayer];
+                var txt = kvp.Value.Troops.ToString();
+                (float x, float y) = coords[kvp.Key];
+                var point = new PointF(x, y);
+
+                graphics.DrawString(txt, font, brush, point);
+            }
+
+            var basename = "{0}.graph.png";
+            var filename = String.Format(basename, namenoex);
+
+            img.Save(filename);
         }
     }
 }
