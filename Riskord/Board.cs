@@ -50,7 +50,7 @@ namespace Riskord
 
     public static class MapExtensions
     {
-        public static void ToGraphicalRepresentation(this Board board, string namenoex)
+        public static void ToGraphicalRepresentation(this Board board, List<ulong> players, string namenoex)
         {
             var jsoncoords = File.ReadAllText("coords.pdo");
             var coords = JsonConvert.DeserializeObject<Dictionary<string, (float, float)>>(jsoncoords);
@@ -69,14 +69,14 @@ namespace Riskord
                 new SolidBrush(Color.Teal)
             };
 
-            var players = new List<ulong>();
-
             // Pass one
+            /*
             foreach (KeyValuePair<string, ControlRecord> kvp in board.Territories)
             {
                 if (!players.Contains(kvp.Value.Id))
                     players.Add(kvp.Value.Id);
             }
+            */
 
             // Pass two
             foreach (KeyValuePair<string, ControlRecord> kvp in board.Territories)

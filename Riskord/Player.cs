@@ -15,6 +15,7 @@ namespace Riskord
         public bool CanFortify { get; set; }
         public bool CanDraw { get; set; }
         public string LastFrom { get; set; }
+        public List<string> Cards { get; set; }
 
         public Player()
         {
@@ -25,6 +26,7 @@ namespace Riskord
             CanFortify = false;
             CanDraw = false;
             LastFrom = String.Empty;
+            Cards = new List<string>();
         }
 
         public Player(ulong _id, int _xtroops) : this()

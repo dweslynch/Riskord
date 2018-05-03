@@ -64,8 +64,12 @@ namespace Riskord
         // Gets snapshot of ids
         public static Dictionary<ulong, string> GrabIds()
         {
-            var contents = File.ReadAllText(IDFILE);
-            return JsonConvert.DeserializeObject<Dictionary<ulong, string>>(contents);
+            if (File.Exists(IDFILE))
+            {
+                var contents = File.ReadAllText(IDFILE);
+                return JsonConvert.DeserializeObject<Dictionary<ulong, string>>(contents);
+            }
+            else return new Dictionary<ulong, string>();
         }
 
         public static Task Log(LogMessage msg)
@@ -81,13 +85,12 @@ namespace Riskord
             var text = msg.Content;
             var qadmin = (msg.Author is SocketGuildUser) ? (msg.Author as SocketGuildUser).GuildPermissions.Administrator : false;
             var channelid = msg.Channel.Id.ToString();
-            var buildfile = String.Format("{0}.builder.pdo", channelid);
-            var gamefile = String.Format("{0}.game.pdo", channelid);
+            var buildfile = String.Format("{0}.builder.state", channelid);
+            var gamefile = String.Format("{0}.game.state", channelid);
             var mapfile = String.Format("{0}.map.pdo", channelid);
 
             if (TaggedIn(msg, Client.CurrentUser.Username))
             {
-
                 if (text.Contains(" say "))
                 {
                     var response = text.TextAfter("say");
@@ -129,13 +132,35 @@ namespace Riskord
                     }
                 }
 
+                else if (text.Contains(" tcards"))
+                {
+                    if (File.Exists(gamefile))
+                    {
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        if (game.Players.Exists(p => p.Id == uid))
+                        {
+                            var iplayer = game.PlayerIndexFromId(uid);
+                            var tcards = game.Players[iplayer].Cards;
+                            var acc = "TCards:  ";
+                            foreach (var card in tcards)
+                            {
+                                acc += card + " ";
+                            }
+                            await msg.Author.SendMessageAsync(acc);
+                        }
+                        else await msg.Channel.SendMessageAsync("You aren't in the current game");
+                    }
+                    else await msg.Channel.SendMessageAsync("No game in progress");
+                }
+
                 else if (text.Contains(" qturn"))
                 {
                     if (File.Exists(gamefile))
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        var response = String.Format("Current Player:  {0}", game.CurrentPlayer);
+                        var response = String.Format("Current Player:  {0}", game.CurrentUsername);
                         await msg.Channel.SendMessageAsync(response);
                     }
                     else if (File.Exists(buildfile))
@@ -175,30 +200,28 @@ namespace Riskord
                     else await msg.Channel.SendMessageAsync("No game in progress");
                 }
 
-                else if (text.Contains(" repr"))
+                else if (text.Contains(" repr") || text.Contains(" show map"))
                 {
                     if (File.Exists(gamefile))
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        var acc = "Current Turn:  " + game.CurrentPlayer + Environment.NewLine;
                         var filename = channelid + ".graph.png";
+                        var colors = new List<string> { "Black", "Blue", "Orange", "Green", "Red", "Teal" };
+                        var players = game.Players.Select(p => p.Id).ToList();
 
-                        game.Board.ToGraphicalRepresentation(channelid);
+                        game.Board.ToGraphicalRepresentation(players, channelid);
 
-                        await msg.Channel.SendFileAsync(filename);
-                        /*
-                        acc += "```fs" + Environment.NewLine;
-                        acc += String.Format("{0,-15}  {1,7}  {2}", "Territory", "Troops", "Player");
-                        acc += Environment.NewLine;
-                        foreach (KeyValuePair<string, ControlRecord> kvp in game.Board.Territories)
+                        var acc = "```fs" + Environment.NewLine;
+                        for (int i = 0; i < players.Count; i++)
                         {
-                            acc += String.Format("{0,-15}  {1,7}  {2}", kvp.Key, kvp.Value.Troops, "\"" + kvp.Value.PlayerName + "\"");
+                            acc += String.Format("{0,-7} : \"{1}\"", colors[i], Player.Lookup(players[i]));
                             acc += Environment.NewLine;
                         }
                         acc += "```";
+
                         await msg.Channel.SendMessageAsync(acc);
-                        */
+                        await msg.Channel.SendFileAsync(filename);
                     }
                     else if (File.Exists(buildfile))
                     {
@@ -277,7 +300,7 @@ namespace Riskord
 
                     // All users tagged in the message except ourselves
                     var socketusers = msg.MentionedUsers.Where(u => u.Id != Client.CurrentUser.Id).ToList();
-                    var usrids = new List<ulong>();
+                    var usrids = socketusers.Select(u => u.Id).ToList();
                     foreach (var usr in socketusers)
                     {
                         if (snapshot.ContainsKey(usr.Id))
@@ -345,6 +368,32 @@ namespace Riskord
                     else await msg.Channel.SendMessageAsync("No setup phase in progress");
                 }
 
+                else if (text.Contains(" tradein"))
+                {
+                    if (File.Exists(gamefile))
+                    {
+                        var gamecontents = File.ReadAllText(gamefile);
+                        var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
+                        if (game.CurrentPlayer.Id == uid)
+                        {
+                            if (game.CurrentPlayer.CanPlace)
+                            {
+                                if (game.TradeIn())
+                                {
+                                    // Not sure if directly modifying game.CurrentPlayer works so not gonna do that
+                                    game.Players[game.Turn].XTroops += game.TCardValue;
+                                    var response = String.Format("{0} has turned in 3 cards for {1} troops", author, game.TCardValue);
+                                    game.AdvanceBonus();
+                                    await msg.Channel.SendMessageAsync(response);
+                                }
+                                else await msg.Channel.SendMessageAsync("You don't have a set of cards to trade");
+                            }
+                            else await msg.Channel.SendMessageAsync("You can only turn in cards at the beginning of your turn");
+                        }
+                        else await msg.Channel.SendMessageAsync("You can only turn in cards on your turn");
+                    }
+                }
+
                 else if (text.Contains(" place "))
                 {
                     var rest = text.TextAfter("place");
@@ -384,6 +433,12 @@ namespace Riskord
                                                     var game = builder.Finalize();
                                                     builder = null;
                                                     File.Delete(buildfile);
+                                                    for (int i = 0; i < 14; i++) // Add territory cards
+                                                    {
+                                                        game.TCards.Add("X");
+                                                        game.TCards.Add("Y");
+                                                        game.TCards.Add("Z");
+                                                    }
                                                     game.Turn = 0;
                                                     game.Players[0].XTroops = game.XTroops(0);
                                                     game.Players[0].CanPlace = true;
@@ -408,7 +463,7 @@ namespace Riskord
                         var parts = rest.Split(' ');
                         if (parts.Length == 2 && Int32.TryParse(parts[1], out int xtroops))
                         {
-                            if (game.Players[game.Turn].Id == uid) // It's your turn
+                            if (game.CurrentPlayer.Id == uid) // It's your turn
                             {
                                 if (game.Board.Territories.ContainsKey(parts[0])) // Territory exists
                                 {
@@ -416,6 +471,7 @@ namespace Riskord
                                     {
                                         if (game.Players.Exists(p => p.Id == uid)) // Does the player exist?  Shouldn't be necessary
                                         {
+                                            // Not sure if directly modifying game.CurrentPlayer works so not gonna do that
                                             var player = game.Players[game.Turn];
                                             if (player.XTroops >= xtroops) // Do they have enough troops?
                                             {
@@ -458,14 +514,15 @@ namespace Riskord
                     else await msg.Channel.SendMessageAsync("No game in progress");
                 }
 
-                else if (text.Contains(" noattack"))
+                else if (text.Contains(" skip attack") || text.Contains(" noattack"))
                 {
                     if (File.Exists(gamefile))
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.Players[game.Turn].Id == uid) // Is it your turn?
+                        if (game.CurrentPlayer.Id == uid) // Is it your turn?
                         {
+                            // Not sure if directly modifying game.CurrentPlayer works so not gonna do that
                             var player = game.Players[game.Turn];
                             if (player.CanAttack) // Can you attack?
                             {
@@ -483,18 +540,24 @@ namespace Riskord
                     else await msg.Channel.SendMessageAsync("No game in progress");
                 }
 
-                else if (text.Contains(" nofort"))
+                else if (text.Contains(" skip fortify") || text.Contains(" nofort"))
                 {
                     if (File.Exists(gamefile))
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.Players[game.Turn].Id == uid) // Is it your turn?
+                        if (game.CurrentPlayer.Id == uid) // Is it your turn?
                         {
                             var player = game.Players[game.Turn];
                             if (player.CanFortify) // Can you fortify?
                             {
                                 player.CanFortify = false;
+                                if (game.Players[game.Turn].CanDraw)
+                                {
+                                    var card = game.Draw(game.Turn);
+                                    game.Players[game.Turn].CanDraw = false;
+                                    await msg.Author.SendMessageAsync("New Card:  " + card);
+                                }
                                 game.AdvanceTurn();
                                 var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
                                 File.WriteAllText(gamefile, jsongame);
@@ -517,20 +580,24 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.Players[game.Turn].Id == uid) // It's your turn
+                        if (game.CurrentPlayer.Id == uid) // It's your turn
                         {
-                            if (game.Players[game.Turn].CanAttack) // Attack phase
+                            if (game.CurrentPlayer.CanAttack) // Attack phase
                             {
                                 if (game.Board.Territories[from].Id == uid) // You own origin
                                 {
                                     if (game.Board.Territories[target].Id != uid) // You don't own target
                                     {
+                                        var targetowner = Player.Lookup(game.Board.Territories[target].Id);
                                         if (game.Board.Territories[from].Troops > 1) // You have enough troops
                                         {
                                             if (game.Board.QAdjacent(from, target)) // The territories are adjacent
                                             {
                                                 if (game.Attack(from, target))
                                                 {
+                                                    var victoryresponse = String.Format("{0} has beaten {1} in {2}!", author, targetowner, target);
+                                                    await msg.Channel.SendMessageAsync(victoryresponse);
+                                                    
                                                     // Need to fix this block to be more efficient
                                                     foreach (Player p in game.Players)
                                                     {
@@ -555,6 +622,7 @@ namespace Riskord
                                                         }
                                                     }
                                                     // Nice!  Can continue attacking
+                                                    game.Players[game.Turn].CanDraw = true; // They can get a card at the end of their turn
                                                 }
                                                 else
                                                 {
@@ -590,9 +658,9 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.Players[game.Turn].Id == uid) // It's your turn
+                        if (game.CurrentPlayer.Id == uid) // It's your turn
                         {
-                            if (game.Players[game.Turn].CanFortify) // Fortification Phase
+                            if (game.CurrentPlayer.CanFortify) // Fortification Phase
                             {
                                 if (Int32.TryParse(parts[0], out int xtroops)) // Valid number
                                 {
@@ -606,10 +674,17 @@ namespace Riskord
                                     }
                                     if (game.Fortify(game.Turn, path, xtroops))
                                     {
+                                        // Not sure if directly modifying game.CurrentPlayer works so not gonna do that
                                         game.Players[game.Turn].CanFortify = false;
+                                        if (game.Players[game.Turn].CanDraw)
+                                        {
+                                            var card = game.Draw(game.Turn);
+                                            game.Players[game.Turn].CanDraw = false;
+                                            await msg.Author.SendMessageAsync("New Card:  " + card);
+                                        }
                                         game.AdvanceTurn();
                                         var response = String.Format("{0} has moved {1} troops from {2} to {3}", author, xtroops, parts[1], parts[parts.Length - 1]);
-                                        response += Environment.NewLine + String.Format("It's {0}'s turn", game.CurrentPlayer);
+                                        response += Environment.NewLine + String.Format("It's {0}'s turn", game.CurrentUsername);
                                         await msg.Channel.SendMessageAsync(response);
 
                                         var jsongame = JsonConvert.SerializeObject(game, Formatting.Indented);
@@ -633,14 +708,14 @@ namespace Riskord
                     {
                         var gamecontents = File.ReadAllText(gamefile);
                         var game = JsonConvert.DeserializeObject<GameMaster>(gamecontents);
-                        if (game.Players[game.Turn].Id == uid)
+                        if (game.CurrentPlayer.Id == uid)
                         {
                             var targets = game.Board.Territories.Where(kvp => kvp.Value.Troops == 0).ToList();
                             if (targets.Count > 0)
                             {
                                 if (Int32.TryParse(rest, out int xtroops))
                                 {
-                                    game.Board.Territories[game.Players[game.Turn].LastFrom].Troops -= xtroops;
+                                    game.Board.Territories[game.CurrentPlayer.LastFrom].Troops -= xtroops;
                                     game.Board.Territories[targets[0].Key].Troops += xtroops;
                                     var response = String.Format("Moved {0} troops from {1} to {2}", xtroops, game.Players[game.Turn].LastFrom, targets[0].Key);
                                     await msg.Channel.SendMessageAsync(response);
@@ -676,7 +751,7 @@ namespace Riskord
                     else await msg.Channel.SendMessageAsync("changes.txt does not exist...yet");
                 }
 
-                else if (text.Contains(" map example"))
+                else if (text.Contains(" show sample map"))
                 {
                     if (File.Exists("sample.txt"))
                     {
@@ -694,6 +769,14 @@ namespace Riskord
                         await msg.Channel.SendMessageAsync(contents);
                     }
                     else await msg.Channel.SendMessageAsync("instructions.txt does not exist...yet");
+                }
+
+                else if (text.Contains(" show default map"))
+                {
+                    if (File.Exists("basemap.png"))
+                    {
+                        await msg.Channel.SendFileAsync("basemap.png");
+                    }
                 }
             }
         }
@@ -726,6 +809,15 @@ namespace Riskord
         {
             Random randy = new Random();
             return lst[randy.Next(0, lst.Length)];
+        }
+        // Returns random element and removes from list
+        public static T PopRandomElement<T>(this List<T> lst)
+        {
+            Random randy = new Random();
+            var i = randy.Next(0, lst.Count);
+            var e = lst[i];
+            lst.RemoveAt(i);
+            return e;
         }
         public static Boolean OneIn(int i)
         {

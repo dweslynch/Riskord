@@ -14,15 +14,17 @@ namespace Riskord
         public Board Board { get; set; }
         public List<Player> Players { get; set; }
         public int Turn { get; set; }
+        public List<string> TCards { get; set; }
+        public int TCardValue { get; set; }
 
-        public ulong CurrentPlayer
+        public Player CurrentPlayer
         {
-            get => Players[Turn].Id;
+            get => Players[Turn];
         }
 
         public String CurrentUsername
         {
-            get => Player.Lookup(CurrentPlayer);
+            get => Player.Lookup(CurrentPlayer.Id);
         }
 
         public GameMaster()
@@ -30,6 +32,8 @@ namespace Riskord
             Board = new Board();
             Players = new List<Player>();
             Turn = 0;
+            TCards = new List<string>();
+            TCardValue = 4;
         }
 
         public GameMaster(Board b, List<Player> players)
@@ -37,12 +41,16 @@ namespace Riskord
             this.Board = b;
             this.Players = players;
             this.Turn = 0;
+            TCards = new List<string>();
+            TCardValue = 4;
         }
         public GameMaster(Dictionary<string, List<string>> adj, List<Player> players, Dictionary<string, ControlRecord> territories, Dictionary<string, List<string>> cont)
         {
             this.Board = new Board(adj, territories, cont);
             this.Players = players;
             this.Turn = 0;
+            TCards = new List<string>();
+            TCardValue = 4;
         }
 
         private bool HasTerritory(ulong id, string territory) =>
@@ -51,7 +59,7 @@ namespace Riskord
         private bool HasTerritory(int iplayer, string territory) =>
             Board.Territories[territory].Id == Players[iplayer].Id;
 
-        private int PlayerIndexFromId(ulong id) =>
+        public int PlayerIndexFromId(ulong id) =>
             Players.FindIndex(x => x.Id == id);
 
         private int XTerritories(int iplayer) =>
@@ -127,6 +135,14 @@ namespace Riskord
                 Turn = 0;
             }
             Players[Turn].XTroops = XTroops(Turn);
+            if (Players[Turn].Cards.Count > 4)
+            {
+                if (TradeIn())
+                {
+                    Players[Turn].XTroops += TCardValue;
+                    AdvanceBonus();
+                }
+            }
             Players[Turn].CanAttack = false;
             Players[Turn].CanFortify = false;
             Players[Turn].CanPlace = true;
@@ -134,6 +150,77 @@ namespace Riskord
 
         public int XTroops(int iplayer) =>
             Bonus(XTerritories(iplayer)) + ContinentBonus(iplayer);
+        
+        public bool TradeIn(int iplayer)
+        {
+            var x = Players[iplayer].Cards.Where(t => t == "X").ToList().Count;
+            var y = Players[iplayer].Cards.Where(t => t == "Y").ToList().Count;
+            var z = Players[iplayer].Cards.Where(t => t == "Z").ToList().Count;
+            var unique = Players[iplayer].Cards.Distinct().ToList().Count;
+
+            if (x > 2)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    Players[iplayer].Cards.Remove("X");
+                    TCards.Add("X"); // Put it back in the deck
+                }
+                return true;
+            }
+            else if (y > 2)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    Players[iplayer].Cards.Remove("Y");
+                    TCards.Add("Y");
+                }
+                return true;
+            }
+            else if (z > 2)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    Players[iplayer].Cards.Remove("Z");
+                    TCards.Add("Z");
+                }
+                return true;
+            }
+            else if (unique > 2)
+            {
+                Players[iplayer].Cards.Remove("X");
+                TCards.Add("X");
+                Players[iplayer].Cards.Remove("Y");
+                TCards.Add("Y");
+                Players[iplayer].Cards.Remove("Z");
+                TCards.Add("Z");
+                return true;
+            }
+            else return false;
+        }
+
+        public bool TradeIn()
+        {
+            return TradeIn(Turn);
+        }
+
+        public void AdvanceBonus()
+        {
+            switch(TCardValue)
+            {
+                case 0:
+                    TCardValue = 4;
+                    break;
+                case 4:
+                    TCardValue = 6;
+                    break;
+                case 6:
+                    TCardValue = 10;
+                    break;
+                default:
+                    TCardValue += 5;
+                    break;
+            }
+        }
 
         // Have to check eligibility before calling these
 
@@ -198,6 +285,14 @@ namespace Riskord
                 return true;
             }
             else return false;
+        }
+
+        public string Draw(int iplayer)
+        {
+            var card = TCards.PopRandomElement(); // Removes element automatically
+            Players[iplayer].Cards.Add(card);
+            //TCards.Remove(card);
+            return card;
         }
     }
 }
